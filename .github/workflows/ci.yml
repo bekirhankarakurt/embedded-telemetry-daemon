@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    name: ${{ matrix.compiler }} / ${{ matrix.config }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+        config: [release, asan-ubsan, tsan]
+        include:
+          - config: release
+            cmake_flags: -DCMAKE_BUILD_TYPE=Release
+          - config: asan-ubsan
+            cmake_flags: -DCMAKE_BUILD_TYPE=Debug -DETD_SANITIZE_ADDRESS=ON
+          - config: tsan
+            cmake_flags: -DCMAKE_BUILD_TYPE=Debug -DETD_SANITIZE_THREAD=ON
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang runtime
+        if: matrix.compiler == 'clang++'
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-rt-18-dev
+
+      - name: Allow TSan on recent kernels
+        if: matrix.config == 'tsan'
+        run: sudo sysctl vm.mmap_rnd_bits=28
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DETD_WERROR=ON ${{ matrix.cmake_flags }}
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Smoke test (daemon -> listener over loopback)
+        run: |
+          ./build/telemetry_listener --port 5055 > listener.log &
+          sleep 0.5
+          # Small log limit on purpose: exercises rotation (old backups are deleted by design).
+          ./build/embedded-telemetry-daemon --rate-hz 50 --port 5055 --duration 3 --verbose \
+              --log-file t.jsonl --log-max-kb 8 --log-backups 2 2> >(tee daemon.log >&2)
+          sleep 0.2
+          kill -INT %1 && wait %1
+          tail -n 3 listener.log
+          received=$(grep -c '^\[bin' listener.log)
+          logged=$(sed -n 's/.*shutdown (duration):.* log lines=\([0-9]*\).*/\1/p' daemon.log)
+          echo "received=$received logged=$logged"
+          grep -Eq 'binary=[1-9][0-9]* json=0 invalid=0 lost=0 reordered=0' listener.log
+          test "$received" -gt 0
+          test "$logged" -eq "$received"
+          grep -Eq 'shutdown \(duration\):.* err=0 \| log .* err=0 overflow=0' daemon.log
+          test -f t.jsonl && test -f t.jsonl.1 && test -f t.jsonl.2 && test ! -e t.jsonl.3
