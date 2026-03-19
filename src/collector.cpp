@@ -47,13 +47,8 @@ std::optional<CpuTimes> parse_proc_stat(std::istream& in) {
         if (!(ss >> t.user >> t.nice >> t.system >> t.idle)) {
             return std::nullopt;
         }
-        std::uint64_t* const optional_cols[] = {&t.iowait, &t.irq, &t.softirq, &t.steal};
-        for (std::uint64_t* col : optional_cols) {
-            if (!(ss >> *col)) {
-                *col = 0;
-                break;
-            }
-        }
+        // A failed extraction stores 0 and stops, so absent columns stay zero.
+        ss >> t.iowait >> t.irq >> t.softirq >> t.steal;
         return t;
     }
     return std::nullopt;

@@ -14,6 +14,7 @@ inline int& failures() {
     return n;
 }
 inline int finish(const char* suite) {
+    // cppcheck-suppress knownConditionTrueFalse
     if (failures() == 0) {
         std::printf("[PASS] %s\n", suite);
         return EXIT_SUCCESS;
