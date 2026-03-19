@@ -10,8 +10,8 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
-#include <signal.h>
 #include <unistd.h>
+#include <csignal>
 
 #include <algorithm>
 #include <atomic>
@@ -33,7 +33,7 @@
 namespace {
 
 /// Process exit codes (values follow BSD sysexits.h conventions).
-enum class ExitCode : int {
+enum class ExitCode : std::uint8_t {
     Ok = 0,         ///< Normal termination, including SIGINT/SIGTERM shutdown.
     Usage = 64,     ///< Invalid command line (EX_USAGE).
     Software = 70,  ///< Unexpected internal error (EX_SOFTWARE).
@@ -206,11 +206,15 @@ struct ParseOutcome {
             return {std::nullopt, ExitCode::Ok};
         }
         if (arg == "--broadcast" || arg == "--no-log" || arg == "--no-udp" || arg == "--verbose") {
-            bool& target = arg == "--broadcast" ? o.broadcast
-                           : arg == "--no-log"  ? o.no_log
-                           : arg == "--no-udp"  ? o.no_udp
-                                                : o.verbose;
-            if (!flag(target)) {
+            bool* target = &o.verbose;
+            if (arg == "--broadcast") {
+                target = &o.broadcast;
+            } else if (arg == "--no-log") {
+                target = &o.no_log;
+            } else if (arg == "--no-udp") {
+                target = &o.no_udp;
+            }
+            if (!flag(*target)) {
                 return usage_error(arg + " does not take a value");
             }
             continue;
@@ -253,7 +257,7 @@ struct ParseOutcome {
             }
             o.log_file = *v;
         } else if (arg == "--log-max-kb") {
-            if (!parse_int(*v, o.log_max_kb) || o.log_max_kb == 0 || o.log_max_kb > 4U * 1024U * 1024U) {
+            if (!parse_int(*v, o.log_max_kb) || o.log_max_kb == 0 || o.log_max_kb > std::size_t{4} * 1024 * 1024) {
                 return usage_error("--log-max-kb must be an integer in 1..4194304");
             }
         } else if (arg == "--log-backups") {

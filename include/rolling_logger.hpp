@@ -19,10 +19,10 @@ namespace etd {
 
 /// Logger configuration.
 struct LoggerConfig {
-    std::string path{"telemetry.jsonl"};  ///< Active log file; backups are path.1 .. path.N.
-    std::size_t max_bytes{1024 * 1024};   ///< Rotate before a write would exceed this size.
-    unsigned backups{3};                  ///< Number of rotated files kept (0 = truncate in place).
-    std::size_t queue_capacity{256};      ///< Ring buffer depth between collector and writer.
+    std::string path{"telemetry.jsonl"};              ///< Active log file; backups are path.1 .. path.N.
+    std::size_t max_bytes{std::size_t{1024} * 1024};  ///< Rotate before a write would exceed this size.
+    unsigned backups{3};                              ///< Number of rotated files kept (0 = truncate in place).
+    std::size_t queue_capacity{256};                  ///< Ring buffer depth between collector and writer.
 };
 
 /**
@@ -63,7 +63,7 @@ private:
     int fd_{-1};
     std::size_t size_{0};
     bool in_error_{false};
-    std::chrono::steady_clock::time_point next_open_attempt_{};
+    std::chrono::steady_clock::time_point next_open_attempt_;
     std::atomic<std::uint64_t> lines_{0};
     std::atomic<std::uint64_t> rotations_{0};
     std::atomic<std::uint64_t> errors_{0};
