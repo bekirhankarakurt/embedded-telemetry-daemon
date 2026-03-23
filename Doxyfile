@@ -1,0 +1,25 @@
+PROJECT_NAME           = "embedded-telemetry-daemon"
+PROJECT_BRIEF          = "Linux telemetry recorder with a CRC-protected UDP downlink"
+PROJECT_NUMBER         = 1.0.0
+OUTPUT_DIRECTORY       = build-docs
+INPUT                  = README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md include src tools
+FILE_PATTERNS          = *.hpp *.cpp *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_AS_ERROR          = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+SOURCE_BROWSER         = YES
+HAVE_DOT               = YES
+CALL_GRAPH             = NO
+UML_LOOK               = YES
+DOT_IMAGE_FORMAT       = svg
+CPP_CLI_SUPPORT        = NO
+PREDEFINED             = ETD_VERSION=\"1.0.0\"
+IMAGE_PATH             = docs
