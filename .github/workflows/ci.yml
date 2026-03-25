@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
@@ -42,20 +50,130 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Smoke test (daemon -> listener over loopback)
+        run: scripts/smoke_test.sh build
+
+  static-analysis:
+    name: static analysis (cppcheck, clang-tidy)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y cppcheck clang clang-tidy
+
+      - name: Configure (compile_commands.json)
+        run: cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: cppcheck
         run: |
-          ./build/telemetry_listener --port 5055 > listener.log &
-          sleep 0.5
-          # Small log limit on purpose: exercises rotation (old backups are deleted by design).
-          ./build/embedded-telemetry-daemon --rate-hz 50 --port 5055 --duration 3 --verbose \
-              --log-file t.jsonl --log-max-kb 8 --log-backups 2 2> >(tee daemon.log >&2)
-          sleep 0.2
-          kill -INT %1 && wait %1
-          tail -n 3 listener.log
-          received=$(grep -c '^\[bin' listener.log)
-          logged=$(sed -n 's/.*shutdown (duration):.* log lines=\([0-9]*\).*/\1/p' daemon.log)
-          echo "received=$received logged=$logged"
-          grep -Eq 'binary=[1-9][0-9]* json=0 invalid=0 lost=0 reordered=0' listener.log
-          test "$received" -gt 0
-          test "$logged" -eq "$received"
-          grep -Eq 'shutdown \(duration\):.* err=0 \| log .* err=0 overflow=0' daemon.log
-          test -f t.jsonl && test -f t.jsonl.1 && test -f t.jsonl.2 && test ! -e t.jsonl.3
+          cppcheck --enable=warning,style,performance,portability --error-exitcode=1 --inline-suppr \
+              --std=c++17 -I include --suppress=missingIncludeSystem --quiet src tools tests
+
+      - name: clang-tidy
+        run: clang-tidy -p build --quiet src/*.cpp tools/*.cpp
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gcovr
+        run: pip install gcovr
+
+      - name: Configure and build with --coverage
+        run: |
+          cmake -S . -B build-cov -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=g++ \
+              -DCMAKE_CXX_FLAGS="--coverage -O0"
+          cmake --build build-cov -j"$(nproc)"
+
+      - name: Unit tests and smoke test
+        run: |
+          ctest --test-dir build-cov --output-on-failure
+          scripts/smoke_test.sh build-cov
+
+      - name: Coverage report
+        run: |
+          mkdir -p site/coverage
+          gcovr --config .gcovr.cfg --object-directory build-cov --print-summary \
+              --fail-under-line 75 \
+              --html-details site/coverage/index.html --json-summary site/coverage/summary.json
+          python3 - <<'PY'
+          import json
+          pct = json.load(open("site/coverage/summary.json"))["line_percent"]
+          color = "brightgreen" if pct >= 90 else "green" if pct >= 80 else "yellow" if pct >= 70 else "red"
+          badge = {"schemaVersion": 1, "label": "coverage", "message": f"{pct:.0f}%", "color": color}
+          json.dump(badge, open("site/coverage-badge.json", "w"))
+          print(badge)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-site
+          path: site
+          if-no-files-found: error
+
+  docs:
+    name: API documentation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Doxygen
+        run: sudo apt-get update && sudo apt-get install -y doxygen graphviz
+
+      - name: Build docs (warnings are errors)
+        run: doxygen Doxyfile
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-docs
+          path: build-docs/html
+          if-no-files-found: error
+
+  pages:
+    name: assemble site
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [coverage, docs]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-site
+          path: site
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: api-docs
+          path: site/api
+
+      - name: Add landing page
+        run: cp docs/index.html site/index.html
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: pages
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
