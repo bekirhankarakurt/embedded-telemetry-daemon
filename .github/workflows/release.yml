@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and test (static binaries)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DETD_WERROR=ON \
+              -DCMAKE_EXE_LINKER_FLAGS="-static"
+          cmake --build build -j"$(nproc)"
+          ctest --test-dir build --output-on-failure
+          scripts/smoke_test.sh build
+
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          name="embedded-telemetry-daemon-${version}-linux-${{ matrix.arch }}"
+          mkdir -p "dist/${name}/bin"
+          strip -o "dist/${name}/bin/embedded-telemetry-daemon" build/embedded-telemetry-daemon
+          strip -o "dist/${name}/bin/telemetry_listener" build/telemetry_listener
+          cp systemd/embedded-telemetry-daemon.service README.md LICENSE CHANGELOG.md "dist/${name}/"
+          tar -C dist -czf "${name}.tar.gz" "${name}"
+          ls -l "${name}.tar.gz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.arch }}
+          path: "*.tar.gz"
+          if-no-files-found: error
+
+  publish:
+    name: publish GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums and release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          (cd dist && sha256sum *.tar.gz > SHA256SUMS && cat SHA256SUMS)
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            /^## \[/ { found = 0 }
+            found' CHANGELOG.md | grep -v '^\[.*\]: ' > notes.md
+          test -s notes.md || { echo "No CHANGELOG entry for $version" >&2; exit 1; }
+          cat notes.md
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+              --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
