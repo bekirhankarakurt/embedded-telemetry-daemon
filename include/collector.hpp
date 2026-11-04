@@ -117,7 +117,7 @@ private:
     // Sampling state (owned by whichever thread calls sample_once()).
     std::optional<CpuTimes> prev_cpu_;
     std::optional<NetCounters> prev_net_;
-    std::chrono::steady_clock::time_point prev_time_{};
+    std::chrono::steady_clock::time_point prev_time_;
     std::uint64_t next_seq_{0};
     std::atomic<std::uint64_t> read_failures_{0};
 

@@ -64,7 +64,7 @@ namespace wire {
 inline constexpr std::uint32_t kMagic = 0x544C4D59U;  ///< ASCII "TLMY".
 inline constexpr std::uint8_t kVersion = 1;
 inline constexpr std::size_t kHeaderSize = 24;
-inline constexpr std::size_t kPayloadSize = 21 * 8;
+inline constexpr std::size_t kPayloadSize = std::size_t{21} * 8;
 inline constexpr std::size_t kCrcSize = 4;
 inline constexpr std::size_t kPacketSize = kHeaderSize + kPayloadSize + kCrcSize;
 static_assert(kPacketSize == 196, "wire format size changed; bump kVersion");

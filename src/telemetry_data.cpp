@@ -1,5 +1,6 @@
 #include "telemetry_data.hpp"
 
+#include <algorithm>
 #include <bitset>
 #include <charconv>
 #include <cinttypes>
@@ -47,10 +48,14 @@ constexpr std::array<Field, 23> kFields{{
     {"net_tx_Bps", nullptr, &S::net_tx_bytes_per_s, true},
 }};
 
+// std::count_if is not constexpr before C++20, so a plain loop is required here.
 constexpr std::size_t count_payload_fields() noexcept {
     std::size_t n = 0;
     for (const auto& f : kFields) {
-        n += f.in_payload ? 1U : 0U;
+        if (f.in_payload) {
+            // cppcheck-suppress useStlAlgorithm
+            ++n;
+        }
     }
     return n;
 }
@@ -210,12 +215,15 @@ template <typename T>
 }  // namespace
 
 bool operator==(const TelemetrySample& a, const TelemetrySample& b) noexcept {
-    for (const auto& f : kFields) {
-        if (f.u64 != nullptr ? (a.*f.u64 != b.*f.u64) : (std::memcmp(&(a.*f.f64), &(b.*f.f64), sizeof(double)) != 0)) {
-            return false;
-        }
-    }
-    return true;
+    // Doubles are compared by bit pattern (what the wire format transports), so NaN round-trips equal.
+    const auto bits = [](double v) noexcept {
+        std::uint64_t u = 0;
+        std::memcpy(&u, &v, sizeof u);
+        return u;
+    };
+    return std::all_of(kFields.begin(), kFields.end(), [&](const Field& f) {
+        return f.u64 != nullptr ? (a.*f.u64 == b.*f.u64) : (bits(a.*f.f64) == bits(b.*f.f64));
+    });
 }
 
 std::string_view to_string(DecodeError e) noexcept {
@@ -315,7 +323,7 @@ DecodeResult decode_binary(const std::uint8_t* data, std::size_t len) noexcept {
 std::string to_json_line(const TelemetrySample& s) {
     std::string out;
     out.reserve(640);
-    out += "{\"type\":\"telemetry\",\"v\":";
+    out += R"({"type":"telemetry","v":)";
     out += std::to_string(wire::kVersion);
     char buf[64];
     for (const auto& f : kFields) {
@@ -352,18 +360,19 @@ std::optional<TelemetrySample> parse_json_line(std::string_view line) {
         if (!key || !js.consume(':')) {
             return std::nullopt;
         }
+        const std::string_view name = *key;
         if (js.peek('"')) {
             const auto val = js.string();
             if (!val) {
                 return std::nullopt;
             }
-            if (*key == "type") {
+            if (name == "type") {
                 type_ok = (*val == "telemetry");
             }
             continue;
         }
         const std::string_view tok = js.number_token();
-        if (*key == "v") {
+        if (name == "v") {
             unsigned v = 0;
             if (!parse_number(tok, v) || v != wire::kVersion) {
                 return std::nullopt;
@@ -372,7 +381,7 @@ std::optional<TelemetrySample> parse_json_line(std::string_view line) {
         }
         for (std::size_t i = 0; i < kFields.size(); ++i) {
             const Field& f = kFields[i];
-            if (*key != f.name) {
+            if (name != f.name) {
                 continue;
             }
             const bool ok = f.u64 != nullptr ? parse_number(tok, s.*f.u64) : parse_number(tok, s.*f.f64);
