@@ -22,7 +22,7 @@ public:
         if (::mkdtemp(buf.data()) == nullptr) {
             throw std::runtime_error("mkdtemp failed");
         }
-        path_ = buf.data();
+        path_ = std::filesystem::path(std::string(buf.data()));
     }
     ~TempDir() {
         std::error_code ec;
