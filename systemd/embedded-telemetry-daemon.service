@@ -1,0 +1,41 @@
+[Unit]
+Description=Embedded telemetry recorder with UDP downlink
+Documentation=https://github.com/bekirhankarakurt/embedded-telemetry-daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+LogsDirectory=embedded-telemetry
+ExecStart=/usr/local/bin/embedded-telemetry-daemon \
+    --rate-hz 1 \
+    --dest 127.0.0.1 --port 5000 --format binary \
+    --log-file /var/log/embedded-telemetry/telemetry.jsonl \
+    --log-max-kb 10240 --log-backups 5
+# SIGTERM triggers the graceful shutdown path (drain log queue, print summary).
+KillSignal=SIGTERM
+TimeoutStopSec=5
+Restart=on-failure
+RestartSec=2
+# Exit code 64 = invalid configuration: restarting will not help.
+RestartPreventExitStatus=64
+
+# Hardening: the daemon only reads /proc, writes its log dir and sends UDP.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
