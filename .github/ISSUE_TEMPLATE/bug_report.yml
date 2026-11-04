@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact command lines (daemon and listener) and any relevant output.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `embedded-telemetry-daemon --version`
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Distribution, kernel (`uname -r`), compiler and CMake versions
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / packet capture
+      description: Status lines, stderr output, or `tcpdump -X` excerpt
+      render: text
