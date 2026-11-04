@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>embedded-telemetry-daemon</title>
+<style>
+  :root { color-scheme: light dark; --bg: #fff; --fg: #1f2328; --muted: #656d76; --card: #f6f8fa; --accent: #0969da; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --card: #161b22; --accent: #58a6ff; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 40rem; margin: 0 auto; padding: 3rem 1rem; }
+  h1 { margin-top: 0; }
+  p { color: var(--muted); }
+  a.card { display: block; background: var(--card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; color: var(--fg); text-decoration: none; }
+  a.card:hover { outline: 2px solid var(--accent); }
+  a.card strong { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>embedded-telemetry-daemon</h1>
+  <p>Linux telemetry recorder with a CRC-protected UDP downlink, in C++17 with no external dependencies.</p>
+  <a class="card" href="api/"><strong>API documentation</strong><br>Doxygen reference for the public headers.</a>
+  <a class="card" href="coverage/"><strong>Coverage report</strong><br>Line and branch coverage from unit tests and the loopback smoke test.</a>
+  <a class="card" href="https://github.com/bekirhankarakurt/embedded-telemetry-daemon"><strong>Source on GitHub</strong><br>README, releases and issues.</a>
+</main>
+</body>
+</html>
