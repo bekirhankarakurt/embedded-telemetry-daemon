@@ -3,9 +3,17 @@
 **A Linux telemetry recorder with a CRC-protected UDP downlink, written in C++17 with no external dependencies.**
 
 [![CI](https://github.com/bekirhankarakurt/embedded-telemetry-daemon/actions/workflows/ci.yml/badge.svg)](https://github.com/bekirhankarakurt/embedded-telemetry-daemon/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/bekirhankarakurt/embedded-telemetry-daemon/actions/workflows/codeql.yml/badge.svg)](https://github.com/bekirhankarakurt/embedded-telemetry-daemon/actions/workflows/codeql.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fbekirhankarakurt.github.io%2Fembedded-telemetry-daemon%2Fcoverage-badge.json)](https://bekirhankarakurt.github.io/embedded-telemetry-daemon/coverage/)
+[![Release](https://img.shields.io/github/v/release/bekirhankarakurt/embedded-telemetry-daemon)](https://github.com/bekirhankarakurt/embedded-telemetry-daemon/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)
 ![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
+
+![Demo: listener receiving telemetry from the daemon](docs/demo.gif)
+
+**Documentation:** [API reference and coverage report](https://bekirhankarakurt.github.io/embedded-telemetry-daemon/) ·
+[Releases](https://github.com/bekirhankarakurt/embedded-telemetry-daemon/releases) · [Changelog](CHANGELOG.md)
 
 ## Why / what
 
@@ -280,9 +288,28 @@ cmake --build build-tsan -j
 ctest --test-dir build-tsan --output-on-failure
 ```
 
-CI runs {GCC, Clang} × {Release, ASan+UBSan, TSan} with `-Werror`. Each job runs the unit tests plus a
-loopback smoke test: the daemon sends 3 s at 50 Hz to the listener, and the job checks for zero loss,
-log-line count equal to packets received, and correct rotation.
+CI runs {GCC, Clang} × {Release, ASan+UBSan, TSan} with `-Werror`. Each job runs the unit tests plus
+`scripts/smoke_test.sh`: the daemon sends 3 s at 50 Hz to the listener, and the script checks for zero
+loss, log-line count equal to packets received, correct rotation and the exit codes.
+
+Further CI jobs:
+
+| Job | What it does |
+|-----|--------------|
+| static analysis | `cppcheck` and `clang-tidy` (configured by the committed [`.clang-tidy`](.clang-tidy)); both must pass |
+| coverage | `--coverage` build, unit tests + smoke test, `gcovr` report (≥ 75 % lines enforced); badge and HTML published to GitHub Pages |
+| docs | Doxygen API docs (`Doxyfile`, warnings are errors), published to GitHub Pages |
+| CodeQL | `security-and-quality` queries for C/C++, weekly and on every push |
+| release | on a `v*` tag: static `linux-x86_64` and `linux-aarch64` tarballs + `SHA256SUMS` attached to a GitHub Release |
+
+Run the analysis locally:
+
+```bash
+cppcheck --enable=warning,style,performance,portability --error-exitcode=1 --inline-suppr \
+    --std=c++17 -I include --suppress=missingIncludeSystem --quiet src tools tests
+cmake -S . -B build-tidy -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_CXX_COMPILER=clang++
+clang-tidy -p build-tidy --quiet src/*.cpp tools/*.cpp
+```
 
 ## Troubleshooting / FAQ
 
@@ -313,10 +340,17 @@ log-line count equal to packets received, and correct rotation.
 ├── tools/
 │   └── telemetry_listener.cpp# ground-station receiver
 ├── tests/                    # CTest suites, /proc fixtures, temp-dir helper
+├── scripts/smoke_test.sh     # end-to-end loopback test used by CI and coverage
 ├── systemd/                  # hardened service unit
-├── .github/workflows/ci.yml  # GCC/Clang × Release/ASan+UBSan/TSan
+├── docs/                     # demo GIF + recording script, GitHub Pages landing page
+├── .github/
+│   ├── workflows/            # ci.yml, codeql.yml, release.yml
+│   ├── ISSUE_TEMPLATE/       # bug report, feature request
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── dependabot.yml        # weekly GitHub Actions updates
 ├── CMakeLists.txt
-└── .clang-format
+├── Doxyfile  .gcovr.cfg  .clang-format  .clang-tidy
+└── CHANGELOG.md  CONTRIBUTING.md  SECURITY.md  LICENSE
 ```
 
 ## Roadmap
@@ -326,11 +360,17 @@ log-line count equal to packets received, and correct rotation.
 - [x] Rotating log with bounded queue and overflow accounting
 - [x] Ground-station listener with gap/reorder detection
 - [x] CI matrix with sanitizers, hardened systemd unit
+- [x] Static analysis, coverage, CodeQL, API docs and tagged releases
 - [ ] Per-core CPU and thermal zones (`/sys/class/thermal`)
 - [ ] Optional IPv6 / multicast downlink
 - [ ] Configuration file in addition to CLI flags
 - [ ] Listener CSV export and simple plotting script
 - [ ] Packaging (`.deb`) and cross-compilation toolchain file for ARM
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build, test and style rules. Report vulnerabilities privately as
+described in [SECURITY.md](SECURITY.md).
 
 ## License
 
